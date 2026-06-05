@@ -20,33 +20,39 @@ export class ByteonicClient {
   async submit(formSlug: string, data: Record<string, any> | FormData): Promise<SubmissionResponse> {
     const url = `${this.baseUrl}/forms/${formSlug}/submit`;
     
-    // Convert FormData to JSON payload
-    let payload: Record<string, any> = {};
+    // Auto-track metadata
+    const meta = {
+      sdk_version: '1.0.0',
+      source_url: typeof window !== 'undefined' ? window.location.href : 'server',
+      submission_source: 'byteonic_intake_sdk'
+    };
+
+    let fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
+      }
+    };
+
     if (typeof FormData !== 'undefined' && data instanceof FormData) {
-      data.forEach((value, key) => {
-        if (payload[key]) {
-          if (Array.isArray(payload[key])) {
-            payload[key].push(value);
-          } else {
-            payload[key] = [payload[key], value];
-          }
-        } else {
-          payload[key] = value;
-        }
-      });
+      // Native File uploads require FormData to remain untouched.
+      // Do NOT set Content-Type header, the browser sets the multi-part boundary automatically.
+      data.append('_meta', JSON.stringify(meta));
+      fetchOptions.body = data;
     } else {
-      payload = data as Record<string, any>;
+      // Standard JSON payload
+      const payload = data as Record<string, any>;
+      payload._meta = meta;
+      
+      fetchOptions.headers = {
+        ...fetchOptions.headers,
+        'Content-Type': 'application/json'
+      };
+      fetchOptions.body = JSON.stringify(payload);
     }
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await fetch(url, fetchOptions);
 
       const responseData = await response.json().catch(() => ({}));
       

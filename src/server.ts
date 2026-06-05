@@ -1,0 +1,124 @@
+import { SubmissionResponse } from './types';
+
+export interface ServerConfig {
+  apiKey: string;
+  baseUrl?: string;
+  /**
+   * If your Byteonic Intake dashboard has Domain Whitelisting enabled,
+   * you MUST provide a matching origin here to bypass the block.
+   * Example: "https://yourdomain.com"
+   */
+  origin?: string;
+}
+
+export interface ServerSubmitOptions {
+  /**
+   * The actual IP address of the end-user (e.g., from req.headers['x-forwarded-for']).
+   * This ensures your Intake dashboard shows the user's location, not your server's location.
+   */
+  userIp?: string;
+  /**
+   * The actual User-Agent of the end-user browser.
+   */
+  userAgent?: string;
+  /**
+   * A custom source URL to tag this submission with.
+   */
+  sourceUrl?: string;
+}
+
+export class ByteonicServerClient {
+  private apiKey: string;
+  private baseUrl: string;
+  private origin?: string;
+
+  constructor(config: ServerConfig) {
+    if (!config.apiKey) {
+      throw new Error('[Byteonic Intake] API Key is required');
+    }
+    this.apiKey = config.apiKey;
+    this.baseUrl = config.baseUrl || 'https://intake.byteoniclabs.com/api/external';
+    this.origin = config.origin;
+  }
+
+  /**
+   * Submit form data to Byteonic Intake from a Node.js Server
+   * @param formSlug The slug of the form to submit to
+   * @param data The form data (Record<string, any> or FormData)
+   * @param options Server-specific options for tracking user IP/Agent
+   */
+  async submit(formSlug: string, data: Record<string, any> | FormData, options: ServerSubmitOptions = {}): Promise<SubmissionResponse> {
+    const url = `${this.baseUrl}/forms/${formSlug}/submit`;
+    
+    // Auto-track metadata for servers
+    const meta = {
+      sdk_version: '1.0.0-server',
+      source_url: options.sourceUrl || 'server',
+      submission_source: 'byteonic_intake_sdk_server'
+    };
+
+    let fetchHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${this.apiKey}`
+    };
+
+    // Spoof origin if provided to bypass domain whitelists safely
+    if (this.origin) {
+      fetchHeaders['Origin'] = this.origin;
+      fetchHeaders['Referer'] = this.origin;
+    }
+    
+    // Forward user headers if provided
+    if (options.userIp) {
+      fetchHeaders['x-forwarded-for'] = options.userIp;
+    }
+    if (options.userAgent) {
+      fetchHeaders['User-Agent'] = options.userAgent;
+    }
+
+    let fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: fetchHeaders
+    };
+
+    if (typeof FormData !== 'undefined' && data instanceof FormData) {
+      // Native Node 18+ FormData support
+      data.append('_meta', JSON.stringify(meta));
+      fetchOptions.body = data;
+    } else {
+      // Standard JSON payload
+      const payload = data as Record<string, any>;
+      payload._meta = meta;
+      
+      fetchOptions.headers = {
+        ...fetchOptions.headers,
+        'Content-Type': 'application/json'
+      };
+      fetchOptions.body = JSON.stringify(payload);
+    }
+
+    try {
+      const response = await fetch(url, fetchOptions);
+      const responseData = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: responseData.error || `Submission failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      return {
+        success: true,
+        data: responseData,
+        status: response.status
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Network request failed',
+        status: 500
+      };
+    }
+  }
+}

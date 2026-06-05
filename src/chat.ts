@@ -1,0 +1,113 @@
+import { ByteonicConfig } from './types';
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface ChatbotConfig {
+  botId: string;
+  name?: string;
+  theme?: string;
+  welcomeMessage?: string;
+  [key: string]: any;
+}
+
+export interface GenerateResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface GenerateOptions {
+  onChunk?: (fullMessage: string) => void;
+}
+
+export class ByteonicChatClient {
+  private apiKey: string;
+  private baseUrl: string;
+
+  constructor(config: ByteonicConfig) {
+    if (!config.apiKey) {
+      throw new Error('[Byteonic Intake] API Key is required');
+    }
+    this.apiKey = config.apiKey;
+    this.baseUrl = config.baseUrl || 'https://backend.intake.byteoniclabs.com/api/v1/chat';
+  }
+
+  async getConfig(botId: string): Promise<ChatbotConfig | null> {
+    const url = `${this.baseUrl}/config?id=${botId}`;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async generate(botId: string, sessionId: string, message: string, history: ChatMessage[] = [], options?: GenerateOptions): Promise<GenerateResponse> {
+    const url = `${this.baseUrl}/generate`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({ 
+          chatbot_id: botId, 
+          session_id: sessionId, 
+          message, 
+          history 
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Generation failed');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let fullMessage = '';
+
+      if (reader) {
+        let done = false;
+        let buffer = '';
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete lines in buffer
+
+            for (const line of lines) {
+              if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  const content = data.choices?.[0]?.delta?.content;
+                  if (content) {
+                    fullMessage += content;
+                    if (options?.onChunk) options.onChunk(fullMessage);
+                  }
+                } catch (e) {
+                  // Ignore partial chunk parse errors
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return { success: true, message: fullMessage.trim() || 'No response generated.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error' };
+    }
+  }
+}
