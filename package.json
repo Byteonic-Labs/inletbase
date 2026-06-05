@@ -15,12 +15,32 @@
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.mjs",
       "require": "./dist/react/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
     }
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "byteonic",
+    "intake",
+    "forms",
+    "form-builder",
+    "react",
+    "chatbot"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Byteonic-Labs/intake.byteoniclabs.com.git"
   },
   "peerDependencies": {
     "react": ">=16.8"
@@ -31,6 +51,7 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@types/react": "^19.2.14",
     "react": "^19.2.4",
     "tsup": "^8.5.1",

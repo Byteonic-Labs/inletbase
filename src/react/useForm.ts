@@ -9,7 +9,7 @@ export interface UseByteonicIntakeOptions {
   baseUrl?: string;
 }
 
-export function useByteonicIntake(options: UseByteonicIntakeOptions | string) {
+export function useByteonicIntake<T = Record<string, any>>(options: UseByteonicIntakeOptions | string) {
   const formSlug = typeof options === 'string' ? options : options.formSlug;
   const configApiKey = typeof options === 'string' ? undefined : options.apiKey;
   const configBaseUrl = typeof options === 'string' ? undefined : options.baseUrl;
@@ -26,7 +26,7 @@ export function useByteonicIntake(options: UseByteonicIntakeOptions | string) {
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<SubmissionResponse | null>(null);
 
-  const submit = useCallback(async (data: Record<string, any> | FormData | React.FormEvent<HTMLFormElement>) => {
+  const submit = useCallback(async (data: T | FormData | React.FormEvent<HTMLFormElement>) => {
     setIsLoading(true);
     setError(null);
     setIsSuccess(false);
@@ -36,9 +36,19 @@ export function useByteonicIntake(options: UseByteonicIntakeOptions | string) {
       
       if (!client) {
         if (!configApiKey) {
-          throw new Error('Byteonic Intake: apiKey is required via <ByteonicProvider> or directly in useByteonicIntake');
+          const envKey = 
+            (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BYTEONIC_API_KEY) ||
+            (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_BYTEONIC_API_KEY) ||
+            (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BYTEONIC_API_KEY);
+
+          if (envKey) {
+            client = new ByteonicClient({ apiKey: envKey as string, baseUrl: configBaseUrl });
+          } else {
+            throw new Error('Byteonic Intake: apiKey is required via <ByteonicProvider>, directly in useByteonicIntake, or as an environment variable (NEXT_PUBLIC_BYTEONIC_API_KEY / VITE_BYTEONIC_API_KEY)');
+          }
+        } else {
+          client = new ByteonicClient({ apiKey: configApiKey, baseUrl: configBaseUrl });
         }
-        client = new ByteonicClient({ apiKey: configApiKey, baseUrl: configBaseUrl });
       }
 
       let payload: any = data;
