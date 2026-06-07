@@ -1,6 +1,6 @@
 {
   "name": "@byteoniclabs/intake",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Securely submit forms to Byteonic Intake from any frontend.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -40,8 +40,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Byteonic-Labs/intake.byteoniclabs.com.git"
+    "url": "git+https://github.com/Byteonic-Labs/byteonic-intake-package.git"
   },
+  "bugs": {
+    "url": "https://github.com/Byteonic-Labs/byteonic-intake-package/issues"
+  },
+  "homepage": "https://github.com/Byteonic-Labs/byteonic-intake-package#readme",
   "peerDependencies": {
     "react": ">=16.8"
   },
