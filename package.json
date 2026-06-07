@@ -40,12 +40,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Byteonic-Labs/byteonic-intake-package.git"
+    "url": "git+https://github.com/Byteonic-Labs/byteonic-intake.git"
   },
   "bugs": {
-    "url": "https://github.com/Byteonic-Labs/byteonic-intake-package/issues"
+    "url": "https://github.com/Byteonic-Labs/byteonic-intake/issues"
   },
-  "homepage": "https://github.com/Byteonic-Labs/byteonic-intake-package#readme",
+  "homepage": "https://intake.byteoniclabs.com",
   "peerDependencies": {
     "react": ">=16.8"
   },
