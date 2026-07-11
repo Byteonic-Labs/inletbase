@@ -1,33 +1,33 @@
-# @byteoniclabs/intake
+# inletbase
 
-The official, lightweight client library to easily send form submissions and integrate real-time AI Chatbots securely into your Byteonic Intake projects. Works seamlessly with **Vanilla JS**, **React**, and **Node.js** backends.
+The official, lightweight client library to easily send form submissions and integrate real-time AI Chatbots securely into your **Inletbase** projects. Works seamlessly with **Vanilla JS**, **React**, and **Node.js** backends.
 
 ## Installation
 
 ```bash
-npm install @byteoniclabs/intake
+npm install inletbase
 # or
-yarn add @byteoniclabs/intake
+yarn add inletbase
 # or
-pnpm add @byteoniclabs/intake
+pnpm add inletbase
 ```
 
 ---
 
 ## 1. Forms (React & Vanilla JS)
 
-The easiest way to use Intake forms in React is via our native hooks.
+The easiest way to use Inletbase forms in React is via our native hooks.
 
 ### React: Simple Form Hook
 
 ```tsx
-import { useByteonicIntake } from '@byteoniclabs/intake/react';
+import { useInletbase } from 'inletbase/react';
 
 export default function ContactForm() {
   // Pass your publishable API key and form slug
-  const { submit, isLoading, isSuccess, error } = useByteonicIntake({
+  const { submit, isLoading, isSuccess, error } = useInletbase({
     formSlug: 'contact-form',
-    apiKey: 'YOUR_PUBLISHABLE_API_KEY', // You can also set VITE_BYTEONIC_API_KEY / NEXT_PUBLIC_BYTEONIC_API_KEY
+    apiKey: 'YOUR_PUBLISHABLE_API_KEY', // You can also set VITE_INLETBASE_API_KEY / NEXT_PUBLIC_INLETBASE_API_KEY
   });
 
   if (isSuccess) {
@@ -49,19 +49,19 @@ export default function ContactForm() {
 
 ### React: Spam Protection (Honeypot)
 
-Prevent bot spam effortlessly without annoying CAPTCHAs. Just drop `<ByteonicHoneypot />` anywhere inside your `<form>`! It renders an invisible input field that tricks bots into filling it out.
+Prevent bot spam effortlessly without annoying CAPTCHAs. Just drop `<InletbaseHoneypot />` anywhere inside your `<form>`! It renders an invisible input field that tricks bots into filling it out.
 
 ```tsx
-import { useByteonicIntake, ByteonicHoneypot } from '@byteoniclabs/intake/react';
+import { useInletbase, InletbaseHoneypot } from 'inletbase/react';
 
 export default function SafeForm() {
-  const { submit } = useByteonicIntake('contact-form');
+  const { submit } = useInletbase('contact-form');
 
   return (
     <form onSubmit={submit}>
       <input type="text" name="name" placeholder="Name" />
       {/* Invisible to humans, catches bots automatically */}
-      <ByteonicHoneypot />
+      <InletbaseHoneypot />
       <button type="submit">Submit</button>
     </form>
   );
@@ -73,17 +73,17 @@ export default function SafeForm() {
 If you're not using React, import the core client and use it anywhere. It automatically parses `FormData`.
 
 ```javascript
-import { ByteonicClient } from '@byteoniclabs/intake';
+import { InletbaseClient } from 'inletbase';
 
-const client = new ByteonicClient({ apiKey: 'YOUR_PUBLISHABLE_API_KEY' });
+const client = new InletbaseClient({ apiKey: 'YOUR_PUBLISHABLE_API_KEY' });
 const myForm = document.getElementById('my-form');
 
 myForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+
   // Pass the FormData object directly!
   const response = await client.submit('contact-form', new FormData(myForm));
-  
+
   if (response.success) {
     alert('Success!');
   }
@@ -98,18 +98,18 @@ Deploy a fully customized, real-time AI Support Chatbot with built-in streaming 
 
 ```tsx
 import { useState } from 'react';
-import { useByteonicChatbot } from '@byteoniclabs/intake/react';
+import { useInletbaseChatbot } from 'inletbase/react';
 
 export default function SupportChat() {
-  const { 
-    messages, 
-    sendMessage, 
-    isLoading, 
-    isStreaming, 
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    isStreaming,
     streamedMessage,
     config,
-    clearHistory 
-  } = useByteonicChatbot({
+    clearHistory
+  } = useInletbaseChatbot({
     botId: 'YOUR_BOT_ID',
     apiKey: 'YOUR_PUBLISHABLE_API_KEY'
   });
@@ -142,25 +142,27 @@ export default function SupportChat() {
 }
 ```
 
+The `config` object returned by `useInletbaseChatbot` contains the chatbot's appearance settings (`welcome_message`, `widget_title`, `primary_color`, `bot_avatar`, `suggestions`, and more) as configured in your Inletbase dashboard.
+
 ---
 
 ## 3. Node.js Server SDK
 
-If you are handling form submissions on your own backend (like Next.js API Routes, Express, or Fastify) and want to securely proxy the data to Byteonic Intake without exposing your API keys, use the Server SDK.
+If you are handling form submissions on your own backend (like Next.js API Routes, Express, or Fastify) and want to securely proxy the data to Inletbase without exposing your API keys, use the Server SDK.
 
 **Features:**
 - Securely spoofs the Origin domain to safely bypass strict whitelisting rules.
-- Forwards user IP addresses to Intake for accurate analytics.
+- Forwards user IP addresses to Inletbase for accurate analytics.
 
 ```typescript
-import { ByteonicServerClient } from '@byteoniclabs/intake/server';
+import { InletbaseServerClient } from 'inletbase/server';
 
 export async function POST(request) {
   const body = await request.json();
 
   // Create client with your private API key
-  const client = new ByteonicServerClient({
-    apiKey: process.env.BYTEONIC_PRIVATE_API_KEY,
+  const client = new InletbaseServerClient({
+    apiKey: process.env.INLETBASE_PRIVATE_API_KEY,
     origin: 'https://my-website.com' // Legally bypass domain whitelisting
   });
 
@@ -176,9 +178,25 @@ export async function POST(request) {
 
 ---
 
+## Configuration
+
+Both clients accept an optional `baseUrl` if you need to point at a custom deployment. The defaults are:
+
+| Client | Default `baseUrl` |
+|---|---|
+| `InletbaseClient` / `InletbaseServerClient` (forms) | `https://inletbase.com/api/external` |
+| `InletbaseChatClient` (chatbot) | `https://api.inletbase.com/api/v1/chat` |
+
+Environment variables recognized by the React hooks:
+
+- `NEXT_PUBLIC_INLETBASE_API_KEY` (Next.js)
+- `VITE_INLETBASE_API_KEY` (Vite)
+
+---
+
 ## Features
 
-- **Zero Configuration**: Connects directly to Byteonic Intake's API.
+- **Zero Configuration**: Connects directly to Inletbase's API.
 - **Real-Time Streaming**: Handles complex SSE JSON chunking securely.
 - **LocalStorage Sync**: The React Chatbot automatically persists user conversations securely.
 - **FormData Support**: Automatically digests native HTML `<form>` elements.

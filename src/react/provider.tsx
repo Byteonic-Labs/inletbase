@@ -1,27 +1,27 @@
 import React, { createContext, useContext, ReactNode, useMemo } from 'react';
-import { ByteonicClient } from '../client';
-import { ByteonicConfig } from '../types';
+import { InletbaseClient } from '../client';
+import { InletbaseConfig } from '../types';
 
-const ByteonicContext = createContext<ByteonicClient | undefined>(undefined);
+const InletbaseContext = createContext<InletbaseClient | undefined>(undefined);
 
-export interface ByteonicProviderProps extends ByteonicConfig {
+export interface InletbaseProviderProps extends InletbaseConfig {
   children: ReactNode;
 }
 
-export function ByteonicProvider({ apiKey, baseUrl, children }: ByteonicProviderProps) {
-  const client = useMemo(() => new ByteonicClient({ apiKey, baseUrl }), [apiKey, baseUrl]);
+export function InletbaseProvider({ apiKey, baseUrl, children }: InletbaseProviderProps) {
+  const client = useMemo(() => new InletbaseClient({ apiKey, baseUrl }), [apiKey, baseUrl]);
 
   return (
-    <ByteonicContext.Provider value={client}>
+    <InletbaseContext.Provider value={client}>
       {children}
-    </ByteonicContext.Provider>
+    </InletbaseContext.Provider>
   );
 }
 
-export function useByteonicClient(): ByteonicClient {
-  const context = useContext(ByteonicContext);
+export function useInletbaseClient(): InletbaseClient {
+  const context = useContext(InletbaseContext);
   if (!context) {
-    throw new Error('useByteonicClient must be used within a ByteonicProvider');
+    throw new Error('useInletbaseClient must be used within an InletbaseProvider');
   }
   return context;
 }

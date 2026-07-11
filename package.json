@@ -1,7 +1,7 @@
 {
-  "name": "@byteoniclabs/intake",
-  "version": "1.0.2",
-  "description": "Securely submit forms to Byteonic Intake from any frontend.",
+  "name": "inletbase",
+  "version": "1.0.0",
+  "description": "Securely submit forms and integrate real-time AI chatbots into any frontend with Inletbase.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -31,21 +31,21 @@
     "dist"
   ],
   "keywords": [
-    "byteonic",
-    "intake",
+    "inletbase",
     "forms",
     "form-builder",
     "react",
-    "chatbot"
+    "chatbot",
+    "ai"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Byteonic-Labs/byteonic-intake.git"
+    "url": "git+https://github.com/Byteonic-Labs/inletbase.git"
   },
   "bugs": {
-    "url": "https://github.com/Byteonic-Labs/byteonic-intake/issues"
+    "url": "https://github.com/Byteonic-Labs/inletbase/issues"
   },
-  "homepage": "https://intake.byteoniclabs.com",
+  "homepage": "https://inletbase.com",
   "peerDependencies": {
     "react": ">=16.8"
   },

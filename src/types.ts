@@ -1,4 +1,4 @@
-export interface ByteonicConfig {
+export interface InletbaseConfig {
   apiKey: string;
   baseUrl?: string;
 }

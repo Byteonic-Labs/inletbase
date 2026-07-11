@@ -1,22 +1,22 @@
 import { useState, useCallback } from 'react';
-import { useByteonicClient } from './provider';
+import { useInletbaseClient } from './provider';
 import { SubmissionResponse } from '../types';
-import { ByteonicClient } from '../client';
+import { InletbaseClient } from '../client';
 
-export interface UseByteonicIntakeOptions {
+export interface UseInletbaseOptions {
   formSlug: string;
   apiKey?: string;
   baseUrl?: string;
 }
 
-export function useByteonicIntake<T = Record<string, any>>(options: UseByteonicIntakeOptions | string) {
+export function useInletbase<T = Record<string, any>>(options: UseInletbaseOptions | string) {
   const formSlug = typeof options === 'string' ? options : options.formSlug;
   const configApiKey = typeof options === 'string' ? undefined : options.apiKey;
   const configBaseUrl = typeof options === 'string' ? undefined : options.baseUrl;
 
-  let contextClient: ByteonicClient | undefined;
+  let contextClient: InletbaseClient | undefined;
   try {
-    contextClient = useByteonicClient();
+    contextClient = useInletbaseClient();
   } catch (e) {
     // Suppress error if outside provider
   }
@@ -33,21 +33,21 @@ export function useByteonicIntake<T = Record<string, any>>(options: UseByteonicI
 
     try {
       let client = contextClient;
-      
+
       if (!client) {
         if (!configApiKey) {
-          const envKey = 
-            (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BYTEONIC_API_KEY) ||
-            (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_BYTEONIC_API_KEY) ||
-            (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BYTEONIC_API_KEY);
+          const envKey =
+            (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_INLETBASE_API_KEY) ||
+            (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_INLETBASE_API_KEY) ||
+            (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INLETBASE_API_KEY);
 
           if (envKey) {
-            client = new ByteonicClient({ apiKey: envKey as string, baseUrl: configBaseUrl });
+            client = new InletbaseClient({ apiKey: envKey as string, baseUrl: configBaseUrl });
           } else {
-            throw new Error('Byteonic Intake: apiKey is required via <ByteonicProvider>, directly in useByteonicIntake, or as an environment variable (NEXT_PUBLIC_BYTEONIC_API_KEY / VITE_BYTEONIC_API_KEY)');
+            throw new Error('Inletbase: apiKey is required via <InletbaseProvider>, directly in useInletbase, or as an environment variable (NEXT_PUBLIC_INLETBASE_API_KEY / VITE_INLETBASE_API_KEY)');
           }
         } else {
-          client = new ByteonicClient({ apiKey: configApiKey, baseUrl: configBaseUrl });
+          client = new InletbaseClient({ apiKey: configApiKey, baseUrl: configBaseUrl });
         }
       }
 
@@ -58,7 +58,7 @@ export function useByteonicIntake<T = Record<string, any>>(options: UseByteonicI
       }
 
       const result = await client.submit(formSlug, payload);
-      
+
       setResponse(result);
       if (result.success !== false) {
         setIsSuccess(true);

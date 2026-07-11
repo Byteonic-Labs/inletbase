@@ -1,4 +1,4 @@
-export { useByteonicIntake } from './useForm';
-export { ByteonicProvider, useByteonicClient } from './provider';
-export { ByteonicHoneypot } from './honeypot';
-export { useByteonicChatbot } from './useChatbot';
+export { useInletbase } from './useForm';
+export { InletbaseProvider, useInletbaseClient } from './provider';
+export { InletbaseHoneypot } from './honeypot';
+export { useInletbaseChatbot } from './useChatbot';

@@ -1,15 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useByteonicClient } from './provider';
-import { ByteonicChatClient, ChatMessage, ChatbotConfig } from '../chat';
+import { useInletbaseClient } from './provider';
+import { InletbaseChatClient, ChatMessage, ChatbotConfig } from '../chat';
 
-export interface UseByteonicChatbotOptions {
+export interface UseInletbaseChatbotOptions {
   botId: string;
   apiKey?: string;
   baseUrl?: string;
   stream?: boolean;
 }
 
-export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) {
+export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string) {
   const botId = typeof options === 'string' ? options : options.botId;
   const configApiKey = typeof options === 'string' ? undefined : options.apiKey;
   const configBaseUrl = typeof options === 'string' ? undefined : options.baseUrl;
@@ -17,12 +17,12 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
 
   let contextClient: any;
   try {
-    contextClient = useByteonicClient();
+    contextClient = useInletbaseClient();
   } catch (e) {
     // Suppress error if outside provider
   }
 
-  const [client, setClient] = useState<ByteonicChatClient | null>(null);
+  const [client, setClient] = useState<InletbaseChatClient | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [config, setConfig] = useState<ChatbotConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +34,7 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
   // Load from local storage exclusively on the client after hydration
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`byteonic_messages_${botId}`);
+      const saved = localStorage.getItem(`inletbase_messages_${botId}`);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
@@ -49,26 +49,26 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
 
   useEffect(() => {
     // Generate a random session ID if not exists (using localStorage to persist across tabs/reloads)
-    let sid = typeof window !== 'undefined' ? localStorage.getItem(`byteonic_chat_${botId}`) : null;
+    let sid = typeof window !== 'undefined' ? localStorage.getItem(`inletbase_chat_${botId}`) : null;
     if (!sid) {
       sid = Math.random().toString(36).substring(2, 15);
-      if (typeof window !== 'undefined') localStorage.setItem(`byteonic_chat_${botId}`, sid);
+      if (typeof window !== 'undefined') localStorage.setItem(`inletbase_chat_${botId}`, sid);
     }
     setSessionId(sid);
 
-    let resolvedClient: ByteonicChatClient | null = null;
-    
+    let resolvedClient: InletbaseChatClient | null = null;
+
     // Attempt to pull apiKey from context, then config, then env
-    const finalApiKey = configApiKey || (contextClient as any)?.apiKey || 
-      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BYTEONIC_API_KEY) ||
-      (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_BYTEONIC_API_KEY) ||
-      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_BYTEONIC_API_KEY);
+    const finalApiKey = configApiKey || (contextClient as any)?.apiKey ||
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_INLETBASE_API_KEY) ||
+      (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_INLETBASE_API_KEY) ||
+      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INLETBASE_API_KEY);
 
     if (finalApiKey) {
-      resolvedClient = new ByteonicChatClient({ apiKey: finalApiKey as string, baseUrl: configBaseUrl });
+      resolvedClient = new InletbaseChatClient({ apiKey: finalApiKey as string, baseUrl: configBaseUrl });
       setClient(resolvedClient);
     } else {
-      console.warn('Byteonic Chatbot: No API Key provided. Chat will not function.');
+      console.warn('Inletbase Chatbot: No API Key provided. Chat will not function.');
     }
 
     if (resolvedClient && isInitialized) {
@@ -77,8 +77,8 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
           setConfig(cfg);
           // Only set welcome message if we don't have stored messages
           setMessages(prev => {
-            if (prev.length === 0 && cfg.welcomeMessage) {
-              return [{ role: 'assistant', content: cfg.welcomeMessage }];
+            if (prev.length === 0 && cfg.welcome_message) {
+              return [{ role: 'assistant', content: cfg.welcome_message }];
             }
             return prev;
           });
@@ -90,7 +90,7 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
   // Persist messages to localStorage whenever they change
   useEffect(() => {
     if (isInitialized && typeof window !== 'undefined') {
-      localStorage.setItem(`byteonic_messages_${botId}`, JSON.stringify(messages));
+      localStorage.setItem(`inletbase_messages_${botId}`, JSON.stringify(messages));
     }
   }, [messages, botId, isInitialized]);
 
@@ -111,7 +111,7 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
       const res = await client.generate(botId, sessionId, content, messages, {
         onChunk: configStream ? (chunk: string) => setStreamedMessage(chunk) : undefined
       });
-      
+
       if (configStream) {
         setIsStreaming(false);
         setStreamedMessage('');
@@ -131,12 +131,12 @@ export function useByteonicChatbot(options: UseByteonicChatbotOptions | string) 
   }, [client, messages, botId, sessionId, configStream]);
 
   const clearHistory = useCallback(() => {
-    setMessages(config?.welcomeMessage ? [{ role: 'assistant', content: config.welcomeMessage }] : []);
+    setMessages(config?.welcome_message ? [{ role: 'assistant', content: config.welcome_message }] : []);
     const sid = Math.random().toString(36).substring(2, 15);
     setSessionId(sid);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`byteonic_chat_${botId}`, sid);
-      localStorage.removeItem(`byteonic_messages_${botId}`);
+      localStorage.setItem(`inletbase_chat_${botId}`, sid);
+      localStorage.removeItem(`inletbase_messages_${botId}`);
     }
   }, [botId, config]);
 

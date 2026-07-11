@@ -1,10 +1,11 @@
 import { SubmissionResponse } from './types';
+import { SDK_VERSION } from './client';
 
 export interface ServerConfig {
   apiKey: string;
   baseUrl?: string;
   /**
-   * If your Byteonic Intake dashboard has Domain Whitelisting enabled,
+   * If your Inletbase dashboard has Domain Whitelisting enabled,
    * you MUST provide a matching origin here to bypass the block.
    * Example: "https://yourdomain.com"
    */
@@ -14,7 +15,7 @@ export interface ServerConfig {
 export interface ServerSubmitOptions {
   /**
    * The actual IP address of the end-user (e.g., from req.headers['x-forwarded-for']).
-   * This ensures your Intake dashboard shows the user's location, not your server's location.
+   * This ensures your Inletbase dashboard shows the user's location, not your server's location.
    */
   userIp?: string;
   /**
@@ -27,34 +28,34 @@ export interface ServerSubmitOptions {
   sourceUrl?: string;
 }
 
-export class ByteonicServerClient {
+export class InletbaseServerClient {
   private apiKey: string;
   private baseUrl: string;
   private origin?: string;
 
   constructor(config: ServerConfig) {
     if (!config.apiKey) {
-      throw new Error('[Byteonic Intake] API Key is required');
+      throw new Error('[Inletbase] API Key is required');
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl || 'https://intake.byteoniclabs.com/api/external';
+    this.baseUrl = config.baseUrl || 'https://inletbase.com/api/external';
     this.origin = config.origin;
   }
 
   /**
-   * Submit form data to Byteonic Intake from a Node.js Server
+   * Submit form data to Inletbase from a Node.js Server
    * @param formSlug The slug of the form to submit to
    * @param data The form data (Record<string, any> or FormData)
    * @param options Server-specific options for tracking user IP/Agent
    */
   async submit(formSlug: string, data: Record<string, any> | FormData, options: ServerSubmitOptions = {}): Promise<SubmissionResponse> {
     const url = `${this.baseUrl}/forms/${formSlug}/submit`;
-    
+
     // Auto-track metadata for servers
     const meta = {
-      sdk_version: '1.0.0-server',
+      sdk_version: `${SDK_VERSION}-server`,
       source_url: options.sourceUrl || 'server',
-      submission_source: 'byteonic_intake_sdk_server'
+      submission_source: 'inletbase_sdk_server'
     };
 
     let fetchHeaders: Record<string, string> = {
@@ -66,7 +67,7 @@ export class ByteonicServerClient {
       fetchHeaders['Origin'] = this.origin;
       fetchHeaders['Referer'] = this.origin;
     }
-    
+
     // Forward user headers if provided
     if (options.userIp) {
       fetchHeaders['x-forwarded-for'] = options.userIp;
@@ -88,7 +89,7 @@ export class ByteonicServerClient {
       // Standard JSON payload
       const payload = data as Record<string, any>;
       payload._meta = meta;
-      
+
       fetchOptions.headers = {
         ...fetchOptions.headers,
         'Content-Type': 'application/json'
@@ -99,7 +100,7 @@ export class ByteonicServerClient {
     try {
       const response = await fetch(url, fetchOptions);
       const responseData = await response.json().catch(() => ({}));
-      
+
       if (!response.ok) {
         return {
           success: false,
