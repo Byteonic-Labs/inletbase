@@ -1,4 +1,4 @@
-# inletbase
+# Inletbase
 
 The official, lightweight client library to easily send form submissions and integrate real-time AI Chatbots securely into your **Inletbase** projects. Works seamlessly with **Vanilla JS**, **React**, and **Node.js** backends.
 
