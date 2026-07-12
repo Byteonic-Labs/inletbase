@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useInletbaseClient } from './provider';
 import { InletbaseChatClient, ChatMessage, ChatbotConfig } from '../chat';
+import { resolveApiKey, readEnvKeys } from '../core/credentials';
 
 export interface UseInletbaseChatbotOptions {
   botId: string;
@@ -30,6 +31,7 @@ export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string
   const [streamedMessage, setStreamedMessage] = useState('');
   const [sessionId, setSessionId] = useState<string>('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load from local storage exclusively on the client after hydration
   useEffect(() => {
@@ -56,22 +58,25 @@ export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string
     }
     setSessionId(sid);
 
-    let resolvedClient: InletbaseChatClient | null = null;
+    // The chat backend authenticates via Origin_Auth, so a key is optional.
+    // Resolve it if present (explicit → provider context → env) but always
+    // construct the client and never warn when it is absent.
+    const envKeys = readEnvKeys();
+    const finalApiKey = resolveApiKey({
+      explicit: configApiKey,
+      context: (contextClient as any)?.apiKey,
+      nextPublic: envKeys.nextPublic,
+      vite: envKeys.vite,
+    });
 
-    // Attempt to pull apiKey from context, then config, then env
-    const finalApiKey = configApiKey || (contextClient as any)?.apiKey ||
-      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_INLETBASE_API_KEY) ||
-      (typeof (globalThis as any).import?.meta !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_INLETBASE_API_KEY) ||
-      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INLETBASE_API_KEY);
+    const resolvedClient = new InletbaseChatClient({ apiKey: finalApiKey, baseUrl: configBaseUrl });
+    setClient(resolvedClient);
 
-    if (finalApiKey) {
-      resolvedClient = new InletbaseChatClient({ apiKey: finalApiKey as string, baseUrl: configBaseUrl });
-      setClient(resolvedClient);
-    } else {
-      console.warn('Inletbase Chatbot: No API Key provided. Chat will not function.');
-    }
-
-    if (resolvedClient && isInitialized) {
+    if (isInitialized) {
+      setError(null);
+      // getConfig throws on network/non-2xx (e.g. blocked origin, CSP, 403).
+      // Catch it and surface via `error` state so it never becomes an unhandled
+      // promise rejection.
       resolvedClient.getConfig(botId).then(cfg => {
         if (cfg) {
           setConfig(cfg);
@@ -83,6 +88,8 @@ export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string
             return prev;
           });
         }
+      }).catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Failed to load chatbot configuration');
       });
     }
   }, [botId, configApiKey, configBaseUrl, isInitialized]);
@@ -117,10 +124,15 @@ export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string
         setStreamedMessage('');
       }
 
-      if (res.success && res.message) {
-        setMessages([...newHistory, { role: 'assistant', content: res.message }]);
+      // Only render an assistant bubble when there is real (non-blank) content.
+      // A blank message (empty or whitespace-only) is treated as "no response"
+      // so we show a friendly fallback instead of an empty bubble.
+      const finalMessage = res.message?.trim();
+      if (res.success && finalMessage) {
+        setMessages([...newHistory, { role: 'assistant', content: res.message! }]);
       } else {
-        setMessages([...newHistory, { role: 'assistant', content: res.error || 'Sorry, I encountered an error.' }]);
+        const fallback = res.error || 'No response was generated. Please try again.';
+        setMessages([...newHistory, { role: 'assistant', content: fallback }]);
       }
     } catch (e) {
       if (configStream) setIsStreaming(false);
@@ -147,6 +159,7 @@ export function useInletbaseChatbot(options: UseInletbaseChatbotOptions | string
     isStreaming,
     streamedMessage,
     config,
-    clearHistory
+    clearHistory,
+    error
   };
 }

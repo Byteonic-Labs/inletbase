@@ -1,6 +1,15 @@
-import { InletbaseConfig, SubmissionResponse } from './types';
+import { InletbaseConfig } from './types';
+import { fetchWithTimeout } from './core/http';
+import {
+  normalizeResponse,
+  normalizeFailure,
+  ResponseEnvelope,
+} from './core/response';
 
 export const SDK_VERSION = '1.0.0';
+
+/** Forms submissions wait at most 30 seconds for a response (Req 1.9). */
+const SUBMIT_TIMEOUT_MS = 30_000;
 
 export class InletbaseClient {
   private apiKey: string;
@@ -15,59 +24,78 @@ export class InletbaseClient {
   }
 
   /**
-   * Submit form data to Inletbase
+   * Submit form data to Inletbase.
+   *
+   * Never throws across this boundary: every outcome (success, non-2xx, and
+   * network/timeout failure) is returned as a canonical `ResponseEnvelope`
+   * (Requirements 1.7, 1.8, 1.9, 6.1, 6.3, 6.4, 6.5, 6.6).
+   *
    * @param formSlug The slug of the form to submit to
    * @param data The form data (Record<string, any> or FormData)
    */
-  async submit(formSlug: string, data: Record<string, any> | FormData): Promise<SubmissionResponse> {
+  async submit(
+    formSlug: string,
+    data: Record<string, any> | FormData
+  ): Promise<ResponseEnvelope> {
+    // Reject an empty or whitespace-only key before sending anything (Req 1.10).
+    if (!this.apiKey || this.apiKey.trim() === '') {
+      return normalizeFailure('[Inletbase] API Key is required');
+    }
+
     const url = `${this.baseUrl}/forms/${formSlug}/submit`;
 
-    // Auto-track metadata
+    // Auto-track submission metadata (Req 1.6).
     const meta = {
       sdk_version: SDK_VERSION,
       source_url: typeof window !== 'undefined' ? window.location.href : 'server',
-      submission_source: 'inletbase_sdk'
+      submission_source: 'inletbase_sdk',
     };
 
-    let fetchOptions: RequestInit = {
+    const fetchOptions: RequestInit = {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`
-      }
+        // Authenticate with the API key as a bearer token (Req 1.2).
+        Authorization: `Bearer ${this.apiKey}`,
+      },
     };
 
     if (typeof FormData !== 'undefined' && data instanceof FormData) {
-      // Native File uploads require FormData to remain untouched.
-      // Do NOT set Content-Type header, the browser sets the multi-part boundary automatically.
+      // Native File uploads require FormData to remain untouched (Req 1.4).
+      // Do NOT set Content-Type, the runtime sets the multipart boundary itself.
       data.append('_meta', JSON.stringify(meta));
       fetchOptions.body = data;
     } else {
-      // Standard JSON payload
-      const payload = data as Record<string, any>;
-      payload._meta = meta;
+      // Standard JSON payload (Req 1.3). Attach `_meta`; a `_gotcha` honeypot
+      // value, when present on the payload, is preserved and forwarded (Req 1.5, 1.6).
+      const payload = { ...(data as Record<string, any>), _meta: meta };
 
       fetchOptions.headers = {
         ...fetchOptions.headers,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       fetchOptions.body = JSON.stringify(payload);
     }
 
-    try {
-      const response = await fetch(url, fetchOptions);
+    // Issue the request bounded by a 30s timeout (Req 1.1, 1.9).
+    const result = await fetchWithTimeout(url, fetchOptions, SUBMIT_TIMEOUT_MS);
 
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(responseData.error || responseData.message || 'Submission failed');
-      }
-
-      return responseData;
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || 'An unexpected error occurred'
-      };
+    if (result.timedOut) {
+      // Timeout before any HTTP status → failure envelope with status 0 (Req 1.9, 6.5).
+      return normalizeFailure('[Inletbase] Request timed out');
     }
+
+    if (result.networkError || !result.response) {
+      // Network-level failure before any HTTP status (Req 1.9, 6.5).
+      return normalizeFailure(
+        result.networkError?.message || '[Inletbase] Network request failed'
+      );
+    }
+
+    const response = result.response;
+    const body = await response.json().catch(() => ({}));
+
+    // Map both success (2xx) and non-2xx responses through the shared normalizer
+    // (Req 1.7, 1.8, 6.1, 6.3, 6.4, 6.6).
+    return normalizeResponse(response.status, body);
   }
 }

@@ -1,5 +1,10 @@
 import { SubmissionResponse } from './types';
 import { SDK_VERSION } from './client';
+import { fetchWithTimeout } from './core/http';
+import { normalizeResponse, normalizeFailure } from './core/response';
+
+/** Forms submission timeout window (Req 2.1). */
+const FORMS_TIMEOUT_MS = 30_000;
 
 export interface ServerConfig {
   apiKey: string;
@@ -49,6 +54,11 @@ export class InletbaseServerClient {
    * @param options Server-specific options for tracking user IP/Agent
    */
   async submit(formSlug: string, data: Record<string, any> | FormData, options: ServerSubmitOptions = {}): Promise<SubmissionResponse> {
+    // Reject a missing/empty (including whitespace-only) API key before sending (Req 2.4).
+    if (typeof this.apiKey !== 'string' || this.apiKey.trim() === '') {
+      return normalizeFailure('[Inletbase] API Key is required');
+    }
+
     const url = `${this.baseUrl}/forms/${formSlug}/submit`;
 
     // Auto-track metadata for servers
@@ -97,29 +107,21 @@ export class InletbaseServerClient {
       fetchOptions.body = JSON.stringify(payload);
     }
 
-    try {
-      const response = await fetch(url, fetchOptions);
-      const responseData = await response.json().catch(() => ({}));
+    // Exactly one request attempt — no retry (Req 2.3), bounded at 30s (Req 2.1).
+    const result = await fetchWithTimeout(url, fetchOptions, FORMS_TIMEOUT_MS);
 
-      if (!response.ok) {
-        return {
-          success: false,
-          error: responseData.error || `Submission failed with status ${response.status}`,
-          status: response.status
-        };
-      }
-
-      return {
-        success: true,
-        data: responseData,
-        status: response.status
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || 'Network request failed',
-        status: 500
-      };
+    // Timeout or network failure before any HTTP status → status:0 failure (Req 2.5, 6.5).
+    if (result.timedOut) {
+      return normalizeFailure('[Inletbase] Request timed out');
     }
+    if (result.networkError || !result.response) {
+      return normalizeFailure(result.networkError?.message || 'Network request failed');
+    }
+
+    const response = result.response;
+    const responseData = await response.json().catch(() => ({}));
+
+    // Map both success and non-2xx statuses through the shared envelope (Req 2.2, 2.3, 6.2).
+    return normalizeResponse(response.status, responseData);
   }
 }

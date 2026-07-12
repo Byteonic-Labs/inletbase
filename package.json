@@ -25,7 +25,9 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify-pack": "node scripts/verify-pack.mjs",
+    "prepublishOnly": "npm run build && node scripts/verify-pack.mjs"
   },
   "files": [
     "dist"

@@ -1,4 +1,5 @@
 node_modules/
+# Build output: git-ignored, shipped to npm via package.json "files"
 dist/
 .env
 .env.*
