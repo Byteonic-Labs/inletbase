@@ -1,6 +1,11 @@
 # Inletbase
 
-The official, lightweight client library to easily send form submissions and integrate real-time AI Chatbots securely into your **Inletbase** projects. Works seamlessly with **Vanilla JS**, **React**, and **Node.js** backends.
+The official client library for **Inletbase**. Send form submissions and drop a real-time AI chatbot into your site with almost no code. Works with **plain JavaScript**, **React**, and **Node.js** servers.
+
+Two things to know up front:
+
+- **Forms** need a **publishable API key** (sent as a bearer token).
+- **Chat** needs **no API key**. The chat backend checks the website domain the request comes from (its `Origin`) against the list of allowed domains you set in your Inletbase dashboard, so you only supply your bot ID.
 
 ## Installation
 
@@ -14,22 +19,19 @@ pnpm add inletbase
 
 ---
 
-## 1. Forms (React & Vanilla JS)
+## Forms
 
-The easiest way to use Inletbase forms in React is via our native hooks.
+### React: the `useInletbaseForm` hook
 
-### React: Simple Form Hook
-
-`useInletbase` accepts **either** a form slug string (`useInletbase('contact-form')`) **or** an options object (`useInletbase({ formSlug, apiKey?, baseUrl? })`). Use the object form when you want to pass the API key or a custom `baseUrl` inline.
+`useInletbaseForm` accepts **either** a form-slug string (`useInletbaseForm('contact-form')`) **or** an options object (`useInletbaseForm({ formSlug, apiKey? })`). Use the object form when you want to pass the API key inline.
 
 ```tsx
-import { useInletbase } from 'inletbase/react';
+import { useInletbaseForm } from 'inletbase/react';
 
 export default function ContactForm() {
-  // Pass your publishable API key and form slug
-  const { submit, isLoading, isSuccess, error } = useInletbase({
+  const { submit, isLoading, isSuccess, error } = useInletbaseForm({
     formSlug: 'contact-form',
-    apiKey: 'YOUR_PUBLISHABLE_API_KEY', // You can also set VITE_INLETBASE_API_KEY / NEXT_PUBLIC_INLETBASE_API_KEY
+    apiKey: 'YOUR_PUBLISHABLE_API_KEY', // or supply it once via InletbaseProvider
   });
 
   if (isSuccess) {
@@ -49,12 +51,46 @@ export default function ContactForm() {
 }
 ```
 
-### React: Set your API key once with a Provider
+The hook returns:
 
-Wrap your app (or any subtree) in `InletbaseProvider` to supply the API key (and an optional `baseUrl`) in one place. Any `useInletbase('slug')` call rendered inside the provider automatically uses that key, so you don't have to pass `apiKey` to every hook.
+| Field | Type | Description |
+|---|---|---|
+| `submit` | `(data) => Promise<ResponseEnvelope>` | Pass an `onSubmit` event, a `FormData` object, or a plain object. |
+| `isLoading` | `boolean` | `true` while a submission is in flight. |
+| `isSuccess` | `boolean` | `true` after a successful (2xx) submission. |
+| `error` | `string \| null` | An error message when the submission fails, otherwise `null`. |
+| `response` | `ResponseEnvelope \| null` | The full backend response for the last submission (see below). `null` before you submit. |
+
+#### Reading the raw response body
+
+The `response` field holds the complete backend response as a `ResponseEnvelope` (described in [Form response shape](#form-response-shape)). Read the raw body from `response.data`:
 
 ```tsx
-import { InletbaseProvider, useInletbase, useInletbaseClient } from 'inletbase/react';
+import { useInletbaseForm } from 'inletbase/react';
+
+export default function ContactForm() {
+  const { submit, response } = useInletbaseForm('contact-form');
+
+  return (
+    <form onSubmit={submit}>
+      <input type="email" name="email" required placeholder="Email" />
+      <button type="submit">Send</button>
+
+      {response?.success && (
+        // response.data is the exact body the backend returned
+        <pre>{JSON.stringify(response.data, null, 2)}</pre>
+      )}
+    </form>
+  );
+}
+```
+
+### React: set your API key once with a Provider
+
+Wrap your app (or any part of it) in `InletbaseProvider` to supply the API key in one place. Any `useInletbaseForm('slug')` call rendered inside the provider uses that key automatically, so you don't have to pass `apiKey` to every hook.
+
+```tsx
+import { InletbaseProvider, useInletbaseForm } from 'inletbase/react';
 
 function App() {
   return (
@@ -65,8 +101,8 @@ function App() {
 }
 
 function ContactForm() {
-  // No apiKey here — it is resolved from the surrounding provider.
-  const { submit, isLoading, error } = useInletbase('contact-form');
+  // No apiKey here — it comes from the surrounding provider.
+  const { submit, isLoading, error } = useInletbaseForm('contact-form');
 
   return (
     <form onSubmit={submit}>
@@ -78,200 +114,96 @@ function ContactForm() {
 }
 ```
 
-Need the underlying client to submit imperatively? Grab it with `useInletbaseClient()` (must be called inside an `InletbaseProvider`):
+Need the underlying client so you can call `submit` yourself? Get it with `useInletbaseFormClient()` (must be called inside an `InletbaseProvider`):
 
 ```tsx
-import { useInletbaseClient } from 'inletbase/react';
+import { useInletbaseFormClient } from 'inletbase/react';
 
 function useContactSubmit() {
-  const client = useInletbaseClient();
+  const client = useInletbaseFormClient();
   return (data: Record<string, any>) => client.submit('contact-form', data);
 }
 ```
 
-> **Key resolution order:** the hooks resolve the API key from, in order, the value passed to the hook → the `InletbaseProvider` → `NEXT_PUBLIC_INLETBASE_API_KEY` → `VITE_INLETBASE_API_KEY`. The first non-empty value wins.
+> **Key resolution order:** the hooks look for the API key in this order — the value passed to the hook → the `InletbaseProvider`. The first non-empty value wins. If neither supplies a key, `submit` returns an error.
 
-### React: Spam Protection (Honeypot)
+### React: spam protection (honeypot)
 
-Prevent bot spam effortlessly without annoying CAPTCHAs. Just drop `<InletbaseHoneypot />` anywhere inside your `<form>`! It renders an invisible input field that tricks bots into filling it out.
+Drop `<InletbaseFormHoneypot />` anywhere inside your `<form>` to catch bots without a CAPTCHA. It renders a hidden input that humans never see; if a bot fills it in, Inletbase ignores the submission.
 
 ```tsx
-import { useInletbase, InletbaseHoneypot } from 'inletbase/react';
+import { useInletbaseForm, InletbaseFormHoneypot } from 'inletbase/react';
 
 export default function SafeForm() {
-  const { submit } = useInletbase('contact-form');
+  const { submit } = useInletbaseForm('contact-form');
 
   return (
     <form onSubmit={submit}>
       <input type="text" name="name" placeholder="Name" />
-      {/* Invisible to humans, catches bots automatically */}
-      <InletbaseHoneypot />
+      <InletbaseFormHoneypot />
       <button type="submit">Submit</button>
     </form>
   );
 }
 ```
 
-### Vanilla JS Usage
+### Vanilla JavaScript
 
-If you're not using React, import the core client and use it anywhere. It automatically parses `FormData`.
+Not using React? Import `InletbaseFormClient` and use it anywhere. It reads native `FormData` directly.
 
 ```javascript
-import { InletbaseClient } from 'inletbase';
+import { InletbaseFormClient } from 'inletbase';
 
-const client = new InletbaseClient({ apiKey: 'YOUR_PUBLISHABLE_API_KEY' });
+const client = new InletbaseFormClient({ apiKey: 'YOUR_PUBLISHABLE_API_KEY' });
 const myForm = document.getElementById('my-form');
 
 myForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  // Pass the FormData object directly!
   const response = await client.submit('contact-form', new FormData(myForm));
 
   if (response.success) {
     alert('Success!');
+    console.log('Backend returned:', response.data);
+  } else {
+    alert(response.error);
   }
 });
 ```
 
----
+### Node.js server
 
-## 2. AI Chatbot (React)
-
-Deploy a fully customized, real-time AI Support Chatbot with built-in streaming directly into your UI.
-
-> **No API key required for chat.** The chat backend (both `InletbaseChatClient` and the `useInletbaseChatbot` hook) authenticates via **Origin_Auth**: it validates the request `Origin` and the `chatbot_id` against the bot's allowed domains configured in your Inletbase dashboard. There is no `Authorization`/API key check for chat, so you only need your bot ID. (An `apiKey` may still be passed for backward compatibility, but it is ignored by the backend.) Forms, by contrast, still require a publishable API key.
-
-```tsx
-import { useState } from 'react';
-import { useInletbaseChatbot } from 'inletbase/react';
-
-export default function SupportChat() {
-  const {
-    messages,
-    sendMessage,
-    isLoading,
-    isStreaming,
-    streamedMessage,
-    config,
-    clearHistory,
-    error        // set when the bot config fails to load (e.g. Origin not allowed)
-  } = useInletbaseChatbot({
-    botId: 'YOUR_BOT_ID'
-    // No apiKey needed — chat authenticates by Origin against the bot's allowed domains.
-  });
-
-  const [input, setInput] = useState('');
-
-  return (
-    <div className="chat-container">
-      {/* 1. Display chat history (automatically saved to localStorage!) */}
-      {messages.map((m, i) => (
-        <div key={i} className={m.role === 'user' ? 'user-bubble' : 'bot-bubble'}>
-          {m.content}
-        </div>
-      ))}
-
-      {/* 2. Display real-time streaming text as the AI types */}
-      {isStreaming && streamedMessage && (
-        <div className="bot-bubble streaming-effect">
-          {streamedMessage} <span className="cursor-blink">|</span>
-        </div>
-      )}
-
-      {/* 3. Send messages */}
-      <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); setInput(''); }}>
-        <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask me anything..." />
-        <button type="submit" disabled={isLoading}>Send</button>
-      </form>
-    </div>
-  );
-}
-```
-
-The `config` object returned by `useInletbaseChatbot` contains the chatbot's appearance settings (`welcome_message`, `widget_title`, `primary_color`, `bot_avatar`, `suggestions`, and more) as configured in your Inletbase dashboard.
-
-### Error & empty-response handling
-
-`sendMessage` never throws — the hook manages failures for you:
-
-- **Config load failure** (for example, the request `Origin` isn't in the bot's allowed domains → HTTP `403`) is surfaced through the `error` field returned by the hook.
-- **Empty responses**: if the model completes but returns no text, that turn is treated as a failure — the hook appends a friendly *"No response was generated. Please try again."* message instead of rendering a blank bubble.
-- **Generation/network failures** append a fallback assistant message so the conversation stays usable.
-
-### Vanilla JS: Chat Client (without React)
-
-Not using React? Use `InletbaseChatClient` directly to load the bot's config and stream a reply.
-
-```javascript
-import { InletbaseChatClient } from 'inletbase';
-
-const chat = new InletbaseChatClient(); // No API key — chat uses Origin_Auth.
-
-// 1. Load appearance config (resolves to the config object, or null if none exists).
-const config = await chat.getConfig('YOUR_BOT_ID');
-
-// 2. Stream a response.
-const result = await chat.generate(
-  'YOUR_BOT_ID',
-  'session-123',                 // any stable id for the conversation
-  'Hello!',                      // the user's message
-  [],                            // prior history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
-  { onChunk: (full) => console.log(full) } // called with the running accumulated text as it streams
-);
-
-if (result.success) {
-  console.log('Final reply:', result.message);
-} else {
-  console.error('Chat failed:', result.error);
-}
-```
-
-- **`getConfig(botId)`** resolves to the config object, or `null` when the bot has none. It **throws** on a non-2xx response (e.g. a `403` when the Origin isn't allowed), so wrap it in `try/catch`. The client instance stays usable after a rejection.
-- **`generate(botId, sessionId, message, history, options?)`** resolves to `{ success, message?, error? }` and does **not** throw. A non-2xx status, a dropped connection, or an empty stream resolves with `success: false` and an `error`; on success, `message` holds the final accumulated reply. Pass `options.onChunk` to receive the running text as it streams.
-
----
-
-## 3. Node.js Server SDK
-
-If you are handling form submissions on your own backend (like Next.js API Routes, Express, or Fastify) and want to securely proxy the data to Inletbase without exposing your API keys, use the Server SDK.
-
-**Features:**
-- Securely spoofs the Origin domain to safely bypass strict whitelisting rules.
-- Forwards user IP addresses to Inletbase for accurate analytics.
+Handling submissions on your own backend (Next.js route handlers, Express, Fastify) and want to keep your key off the client? Use `InletbaseFormServerClient` from `inletbase/server`. It can forward the visitor's IP and user agent for accurate analytics, and can set the request origin to match a strict domain allow-list.
 
 ```typescript
-import { InletbaseServerClient } from 'inletbase/server';
+import { InletbaseFormServerClient } from 'inletbase/server';
 
 export async function POST(request) {
   const body = await request.json();
 
-  // Create client with your private API key
-  const client = new InletbaseServerClient({
+  const client = new InletbaseFormServerClient({
     apiKey: process.env.INLETBASE_PRIVATE_API_KEY,
-    origin: 'https://my-website.com' // Legally bypass domain whitelisting
+    origin: 'https://my-website.com', // match your dashboard's allowed domains
   });
 
   const response = await client.submit('contact-form', body, {
     userIp: request.headers.get('x-forwarded-for'),
     userAgent: request.headers.get('user-agent'),
-    sourceUrl: 'Backend API Submission'
+    sourceUrl: 'Backend API Submission',
   });
 
   return Response.json(response);
 }
 ```
 
----
+### Form response shape
 
-## Form Response Contract
-
-Both form clients — `InletbaseClient` (browser/vanilla + the `useInletbase` hook) and `InletbaseServerClient` (Node.js) — return the **same** response envelope. Neither client throws across this boundary: every outcome (success, non-2xx, and network/timeout failure) resolves to this shape.
+Every form client — `InletbaseFormClient` (browser + the `useInletbaseForm` hook) and `InletbaseFormServerClient` (Node.js) — returns the **same** response, and none of them throw. Success, a non-2xx status, and a network/timeout failure all resolve to this shape, called a `ResponseEnvelope`:
 
 ```ts
 interface ResponseEnvelope {
   success: boolean;  // true only when the HTTP status is 200–299
-  status: number;    // the numeric HTTP status code; 0 on a network/timeout failure
+  status: number;    // the HTTP status code; 0 on a network or timeout failure
   data: any;         // the backend response body (or { error } on a failure)
   error?: string;    // present on failure; mirrors the backend error message
 }
@@ -279,49 +211,91 @@ interface ResponseEnvelope {
 
 | Field | Type | Description |
 |---|---|---|
-| `success` | `boolean` | `true` when the HTTP status is in the 200–299 range, otherwise `false`. |
-| `status` | `number` | The numeric HTTP status code returned by the backend. On a network error or timeout (before any HTTP response is received) this is `0`. |
-| `data` | `any` | The parsed backend response body on success or non-2xx responses. On a network/timeout failure it is `{ error }`. |
-| `error` | `string` (optional) | Present when the request fails; mirrors the backend error message (or the network/timeout message). |
+| `success` | `boolean` | `true` when the status is 200–299, otherwise `false`. |
+| `status` | `number` | The HTTP status code. `0` when the request failed before any response arrived (network error or timeout). |
+| `data` | `any` | The parsed backend body. On a network/timeout failure it is `{ error }`. |
+| `error` | `string` (optional) | Present on failure; the backend or network error message. |
 
-**Backward compatibility:** any top-level fields returned by the backend are also spread onto the envelope, so existing code that reads a field directly off the result (for example `response.id` or `response.message`) keeps working. The canonical `success`, `status`, and `data` fields always take precedence if a backend field shares the same name.
+Any top-level fields the backend returns are also copied onto the envelope, so older code that reads a field straight off the result (for example `response.id` or `response.message`) keeps working. The `success`, `status`, and `data` fields always win if a backend field shares one of those names.
 
 ```ts
 const response = await client.submit('contact-form', data);
 
 if (response.success) {
-  // 2xx — use response.data (and any spread top-level fields)
+  // 2xx — the raw body is in response.data
 } else if (response.status === 0) {
-  // network error or timeout — inspect response.error
+  // network error or timeout — see response.error
 } else {
-  // non-2xx HTTP status — response.status / response.error describe the problem
+  // non-2xx status — response.status and response.error describe the problem
 }
 ```
 
 ---
 
-## Configuration
+## Chatbot
 
-Both clients accept an optional `baseUrl` if you need to point at a custom deployment. The defaults are:
+The simplest way to add a chatbot is a ready-made widget: the `InletbaseChatbot` component for React, or a `<script>` tag for any website. Both render the whole chat experience — launcher button, message history, streaming replies, text input, and send button — from just your bot ID, and both pick up the appearance you set in your dashboard (title, welcome message, colors, avatar, suggestions, position).
 
-| Client | Default `baseUrl` |
-|---|---|
-| `InletbaseClient` / `InletbaseServerClient` (forms) | `https://inletbase.com/api/external` |
-| `InletbaseChatClient` (chatbot) | `https://api.inletbase.com/api/v1/chat` |
+Chat needs **no API key**. The backend authorizes each request by matching the website domain it came from against your bot's allowed domains.
 
-Environment variables recognized by the React hooks:
+### React: the `InletbaseChatbot` component (recommended)
 
-- `NEXT_PUBLIC_INLETBASE_API_KEY` (Next.js)
-- `VITE_INLETBASE_API_KEY` (Vite)
+```tsx
+import { InletbaseChatbot } from 'inletbase/react';
+
+export default function App() {
+  return (
+    <>
+      {/* your app */}
+      <InletbaseChatbot botId="YOUR_BOT_ID" />
+    </>
+  );
+}
+```
+
+Props:
+
+| Prop | Type | Description |
+|---|---|---|
+| `botId` | `string` | Your chatbot's ID. Required. |
+| `apiKey` | `string` (optional) | Accepted for backward compatibility, but the chat backend ignores it. |
+| `className` | `string` (optional) | Extra class on the widget's root element. |
+| `style` | `React.CSSProperties` (optional) | Inline styles for the widget's root element. |
+
+If the bot ID is missing or its config can't be loaded (for example, the current domain isn't in the bot's allowed list), the component shows a visible error state instead of a broken input.
+
+### Any website: the `<script>` widget (recommended, no build step)
+
+Add one tag with your bot ID and a working chatbot appears on the page. No bundler, no framework.
+
+```html
+<script
+  src="https://unpkg.com/inletbase/dist/widget/inletbase-chat.js"
+  data-chatbot-id="YOUR_BOT_ID"
+  async
+></script>
+```
+
+| Attribute | Required | Description |
+|---|---|---|
+| `data-chatbot-id` | yes | Your chatbot's ID. Without it the widget reports an error and does not mount. |
+
+The widget renders inside its own isolated container, so it won't clash with your page's styles. If the config fails to load, it does not mount.
+
+## Authentication
+
+- **Forms** require a publishable API key, sent as `Authorization: Bearer <key>`. Supply it directly to `useInletbaseForm` / `InletbaseFormClient` / `InletbaseFormServerClient`, or once via `InletbaseProvider`.
+- **Chat** requires **no** API key. The backend matches the request's website domain against your bot's allowed domains. Any `apiKey` you pass to the `InletbaseChatbot` component is accepted for backward compatibility but ignored by the backend.
 
 ---
 
-## Features
+## What's exported
 
-- **Zero Configuration**: Connects directly to Inletbase's API.
-- **Real-Time Streaming**: Handles complex SSE JSON chunking securely.
-- **LocalStorage Sync**: The React Chatbot automatically persists user conversations securely.
-- **FormData Support**: Automatically digests native HTML `<form>` elements.
-- **Full TypeScript** support out of the box.
+- **`inletbase`** — `InletbaseFormClient`.
+- **`inletbase/react`** — `useInletbaseForm`, `InletbaseProvider`, `useInletbaseFormClient`, `InletbaseFormHoneypot`, `InletbaseChatbot`.
+- **`inletbase/server`** — `InletbaseFormServerClient` (forms only).
+- **`<script>` widget** — served from `dist/widget/inletbase-chat.js` (no import needed).
+
+---
 
 *Built by [Byteonic Labs](https://byteoniclabs.com)*

@@ -6,9 +6,11 @@ import { normalizeResponse, normalizeFailure } from './core/response';
 /** Forms submission timeout window (Req 2.1). */
 const FORMS_TIMEOUT_MS = 30_000;
 
+/** Fixed Inletbase forms API endpoint. */
+const FORMS_BASE_URL = 'https://inletbase.com/api/external';
+
 export interface ServerConfig {
   apiKey: string;
-  baseUrl?: string;
   /**
    * If your Inletbase dashboard has Domain Whitelisting enabled,
    * you MUST provide a matching origin here to bypass the block.
@@ -33,9 +35,8 @@ export interface ServerSubmitOptions {
   sourceUrl?: string;
 }
 
-export class InletbaseServerClient {
+export class InletbaseFormServerClient {
   private apiKey: string;
-  private baseUrl: string;
   private origin?: string;
 
   constructor(config: ServerConfig) {
@@ -43,7 +44,6 @@ export class InletbaseServerClient {
       throw new Error('[Inletbase] API Key is required');
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl || 'https://inletbase.com/api/external';
     this.origin = config.origin;
   }
 
@@ -59,7 +59,7 @@ export class InletbaseServerClient {
       return normalizeFailure('[Inletbase] API Key is required');
     }
 
-    const url = `${this.baseUrl}/forms/${formSlug}/submit`;
+    const url = `${FORMS_BASE_URL}/forms/${formSlug}/submit`;
 
     // Auto-track metadata for servers
     const meta = {

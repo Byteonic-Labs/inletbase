@@ -1,60 +1,57 @@
 import { useState, useCallback, type FormEvent } from 'react';
-import { useInletbaseClient } from './provider';
-import { SubmissionResponse } from '../types';
-import { InletbaseClient } from '../client';
-import { resolveApiKey, readEnvKeys } from '../core/credentials';
+import { useInletbaseFormClient } from './provider';
+import { InletbaseFormClient } from '../client';
+import { ResponseEnvelope } from '../core/response';
+import { resolveApiKey } from '../core/credentials';
 
-export interface UseInletbaseOptions {
+export interface UseInletbaseFormOptions {
   formSlug: string;
   apiKey?: string;
-  baseUrl?: string;
 }
 
 interface NormalizedArgs {
   formSlug?: string;
   configApiKey?: string;
-  configBaseUrl?: string;
-  /** Set when the argument is neither a non-empty string nor an object carrying a formSlug (Req 8.4). */
+  /** Set when the argument is neither a non-empty string nor an object carrying a formSlug. */
   argError?: string;
 }
 
 /**
- * Normalizes the `useInletbase` argument (Req 8.2, 8.3, 8.4):
+ * Normalizes the `useInletbaseForm` argument:
  * - a non-empty string is treated as the `formSlug`;
- * - an object supplies `formSlug` / `apiKey` / `baseUrl`;
+ * - an object supplies `formSlug` / `apiKey`;
  * - anything else (including empty strings and objects without a usable
  *   `formSlug`) yields an `argError` so the hook can surface it without
  *   initializing, and without throwing during render.
  */
-function normalizeArgs(options: UseInletbaseOptions | string): NormalizedArgs {
+function normalizeArgs(options: UseInletbaseFormOptions | string): NormalizedArgs {
   if (typeof options === 'string') {
     if (options.trim() === '') {
-      return { argError: '[Inletbase] useInletbase requires a non-empty formSlug string' };
+      return { argError: '[Inletbase] useInletbaseForm requires a non-empty formSlug string' };
     }
     return { formSlug: options };
   }
 
   if (options !== null && typeof options === 'object') {
-    const formSlug = (options as UseInletbaseOptions).formSlug;
+    const formSlug = (options as UseInletbaseFormOptions).formSlug;
     if (typeof formSlug !== 'string' || formSlug.trim() === '') {
-      return { argError: '[Inletbase] useInletbase options must include a non-empty formSlug' };
+      return { argError: '[Inletbase] useInletbaseForm options must include a non-empty formSlug' };
     }
     return {
       formSlug,
-      configApiKey: (options as UseInletbaseOptions).apiKey,
-      configBaseUrl: (options as UseInletbaseOptions).baseUrl,
+      configApiKey: (options as UseInletbaseFormOptions).apiKey,
     };
   }
 
-  return { argError: '[Inletbase] useInletbase requires a formSlug string or an options object' };
+  return { argError: '[Inletbase] useInletbaseForm requires a formSlug string or an options object' };
 }
 
-export function useInletbase<T = Record<string, any>>(options: UseInletbaseOptions | string) {
-  const { formSlug, configApiKey, configBaseUrl, argError } = normalizeArgs(options);
+export function useInletbaseForm<T = Record<string, any>>(options: UseInletbaseFormOptions | string) {
+  const { formSlug, configApiKey, argError } = normalizeArgs(options);
 
-  let contextClient: InletbaseClient | undefined;
+  let contextClient: InletbaseFormClient | undefined;
   try {
-    contextClient = useInletbaseClient();
+    contextClient = useInletbaseFormClient();
   } catch (e) {
     // Suppress error if outside provider
   }
@@ -62,12 +59,12 @@ export function useInletbase<T = Record<string, any>>(options: UseInletbaseOptio
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [response, setResponse] = useState<SubmissionResponse | null>(null);
+  const [response, setResponse] = useState<ResponseEnvelope | null>(null);
 
   const submit = useCallback(async (data: T | FormData | FormEvent<HTMLFormElement>) => {
-    // Invalid argument → surface an error without initializing (Req 8.4).
+    // Invalid argument → surface an error without initializing.
     if (argError || !formSlug) {
-      const message = argError || '[Inletbase] useInletbase requires a valid formSlug';
+      const message = argError || '[Inletbase] useInletbaseForm requires a valid formSlug';
       setError(message);
       setIsSuccess(false);
       return { success: false, error: message };
@@ -81,26 +78,22 @@ export function useInletbase<T = Record<string, any>>(options: UseInletbaseOptio
       let client = contextClient;
 
       if (!client) {
-        // Resolve the key with precedence explicit → context → NEXT_PUBLIC → VITE,
-        // reading env through readEnvKeys (no bare import.meta) (Req 7.1-7.4).
-        const envKeys = readEnvKeys();
+        // Resolve the key with precedence explicit → context.
         const apiKey = resolveApiKey({
           explicit: configApiKey,
           context: (contextClient as any)?.apiKey,
-          nextPublic: envKeys.nextPublic,
-          vite: envKeys.vite,
         });
 
         if (!apiKey) {
           // No key resolved for an operation that needs one → surface an error
-          // rather than throwing during env access (Req 7.5).
+          // rather than throwing.
           const message =
-            '[Inletbase] apiKey is required via <InletbaseProvider>, directly in useInletbase, or as an environment variable (NEXT_PUBLIC_INLETBASE_API_KEY / VITE_INLETBASE_API_KEY)';
+            '[Inletbase] apiKey is required via <InletbaseProvider> or directly in useInletbaseForm';
           setError(message);
           return { success: false, error: message };
         }
 
-        client = new InletbaseClient({ apiKey, baseUrl: configBaseUrl });
+        client = new InletbaseFormClient({ apiKey });
       }
 
       let payload: any = data;
@@ -124,7 +117,7 @@ export function useInletbase<T = Record<string, any>>(options: UseInletbaseOptio
     } finally {
       setIsLoading(false);
     }
-  }, [formSlug, argError, contextClient, configApiKey, configBaseUrl]);
+  }, [formSlug, argError, contextClient, configApiKey]);
 
   return {
     submit,

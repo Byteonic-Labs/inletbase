@@ -6,21 +6,22 @@ import {
   ResponseEnvelope,
 } from './core/response';
 
-export const SDK_VERSION = '1.0.0';
+export const SDK_VERSION = '2.0.0';
 
 /** Forms submissions wait at most 30 seconds for a response (Req 1.9). */
 const SUBMIT_TIMEOUT_MS = 30_000;
 
-export class InletbaseClient {
+/** Fixed Inletbase forms API endpoint. */
+const FORMS_BASE_URL = 'https://inletbase.com/api/external';
+
+export class InletbaseFormClient {
   private apiKey: string;
-  private baseUrl: string;
 
   constructor(config: InletbaseConfig) {
     if (!config.apiKey) {
       throw new Error('[Inletbase] API Key is required');
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl || 'https://inletbase.com/api/external';
   }
 
   /**
@@ -42,7 +43,7 @@ export class InletbaseClient {
       return normalizeFailure('[Inletbase] API Key is required');
     }
 
-    const url = `${this.baseUrl}/forms/${formSlug}/submit`;
+    const url = `${FORMS_BASE_URL}/forms/${formSlug}/submit`;
 
     // Auto-track submission metadata (Req 1.6).
     const meta = {

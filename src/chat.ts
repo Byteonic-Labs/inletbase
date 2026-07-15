@@ -37,9 +37,12 @@ export interface GenerateOptions {
   onChunk?: (fullMessage: string) => void;
 }
 
+/** Fixed Inletbase chat API endpoint. */
+const CHAT_BASE_URL = 'https://api.inletbase.com/api/v1/chat';
+
 export class InletbaseChatClient {
   private apiKey?: string;
-  private baseUrl: string;
+  private baseUrl = CHAT_BASE_URL;
 
   /**
    * Constructs a chat client. The chat backend authenticates via Origin_Auth,
@@ -49,7 +52,6 @@ export class InletbaseChatClient {
    */
   constructor(config: ChatClientConfig = {}) {
     this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl || 'https://api.inletbase.com/api/v1/chat';
   }
 
   /**
