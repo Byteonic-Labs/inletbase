@@ -14,6 +14,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    # Serialize publish runs so two overlapping runs can't both pass the
+    # "not yet published" check and then race on npm publish.
+    concurrency:
+      group: npm-publish-${{ github.ref }}
+      cancel-in-progress: false
+
     # Required for npm provenance (supply-chain attestation).
     permissions:
       contents: read
@@ -22,6 +28,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Don't leave GITHUB_TOKEN in local git config; the later npm steps
+          # don't need git auth, and this avoids exposing it to build scripts.
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
