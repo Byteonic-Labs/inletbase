@@ -236,7 +236,7 @@ if (response.success) {
 
 The simplest way to add a chatbot is a ready-made widget: the `InletbaseChatbot` component for React, or a `<script>` tag for any website. Both render the whole chat experience — launcher button, message history, streaming replies, text input, and send button — from just your bot ID, and both pick up the appearance you set in your dashboard (title, welcome message, colors, avatar, suggestions, position).
 
-Chat needs **no API key**. The backend authorizes each request by matching the website domain it came from against your bot's allowed domains.
+Chat needs **no API key**: the backend authorizes each request by matching the website domain it came from against your bot's allowed domains.
 
 ### React: the `InletbaseChatbot` component (recommended)
 

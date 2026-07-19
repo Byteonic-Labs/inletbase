@@ -1,6 +1,6 @@
 {
   "name": "inletbase",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Securely submit forms and integrate real-time AI chatbots into any frontend with Inletbase.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

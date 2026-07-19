@@ -6,13 +6,13 @@ import {
   ResponseEnvelope,
 } from './core/response';
 
-export const SDK_VERSION = '2.0.0';
+export const SDK_VERSION = '2.0.1';
 
 /** Forms submissions wait at most 30 seconds for a response (Req 1.9). */
 const SUBMIT_TIMEOUT_MS = 30_000;
 
-/** Fixed Inletbase forms API endpoint. */
-const FORMS_BASE_URL = 'https://inletbase.com/api/external';
+/** Fixed Inletbase forms API endpoint (public v1 REST API). */
+const FORMS_BASE_URL = 'https://inletbase.com/api/v1';
 
 export class InletbaseFormClient {
   private apiKey: string;
