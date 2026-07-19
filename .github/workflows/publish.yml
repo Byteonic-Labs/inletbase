@@ -1,0 +1,72 @@
+name: Publish to npm
+
+# Publishes the package to npm automatically when the version in package.json
+# changes on `main`. Bump the version, push (or merge) to main, and this
+# workflow builds, verifies, and publishes the new version. It never publishes
+# a version that is already on npm, so ordinary commits are safe.
+on:
+  push:
+    branches: [main]
+  # Lets you trigger a publish by hand from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    # Serialize publish runs so two overlapping runs can't both pass the
+    # "not yet published" check and then race on npm publish.
+    concurrency:
+      group: npm-publish-${{ github.ref }}
+      cancel-in-progress: false
+
+    # Required for npm provenance (supply-chain attestation).
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Don't leave GITHUB_TOKEN in local git config; the later npm steps
+          # don't need git auth, and this avoids exposing it to build scripts.
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify package contents
+        run: npm run verify-pack
+
+      # Publish only if this exact version is not already on npm.
+      - name: Check if version is already published
+        id: check
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$PKG_NAME@$PKG_VERSION is already on npm — skipping publish."
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.check.outputs.already_published == 'false'
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
