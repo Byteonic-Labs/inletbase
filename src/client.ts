@@ -1,12 +1,13 @@
 import { InletbaseConfig } from './types';
 import { fetchWithTimeout } from './core/http';
+import { normalizeSubmissionData } from './core/files';
 import {
   normalizeResponse,
   normalizeFailure,
   ResponseEnvelope,
 } from './core/response';
 
-export const SDK_VERSION = '2.0.1';
+export const SDK_VERSION = '2.0.2';
 
 /** Forms submissions wait at most 30 seconds for a response (Req 1.9). */
 const SUBMIT_TIMEOUT_MS = 30_000;
@@ -52,30 +53,24 @@ export class InletbaseFormClient {
       submission_source: 'inletbase_sdk',
     };
 
+    // Normalize the input (FormData or object) into a JSON-serializable body,
+    // encoding any File/Blob values as base64 `__inletbase_file` payloads — the
+    // shape the forms backend actually stores. We always POST JSON (never raw
+    // multipart), since the forms endpoint does not decode multipart file parts
+    // (Req 1.3, 1.4). `_meta` is attached and any `_gotcha` honeypot value is
+    // preserved and forwarded (Req 1.5, 1.6).
+    const normalized = await normalizeSubmissionData(data);
+    const payload = { ...normalized, _meta: meta };
+
     const fetchOptions: RequestInit = {
       method: 'POST',
       headers: {
         // Authenticate with the API key as a bearer token (Req 1.2).
         Authorization: `Bearer ${this.apiKey}`,
-      },
-    };
-
-    if (typeof FormData !== 'undefined' && data instanceof FormData) {
-      // Native File uploads require FormData to remain untouched (Req 1.4).
-      // Do NOT set Content-Type, the runtime sets the multipart boundary itself.
-      data.append('_meta', JSON.stringify(meta));
-      fetchOptions.body = data;
-    } else {
-      // Standard JSON payload (Req 1.3). Attach `_meta`; a `_gotcha` honeypot
-      // value, when present on the payload, is preserved and forwarded (Req 1.5, 1.6).
-      const payload = { ...(data as Record<string, any>), _meta: meta };
-
-      fetchOptions.headers = {
-        ...fetchOptions.headers,
         'Content-Type': 'application/json',
-      };
-      fetchOptions.body = JSON.stringify(payload);
-    }
+      },
+      body: JSON.stringify(payload),
+    };
 
     // Issue the request bounded by a 30s timeout (Req 1.1, 1.9).
     const result = await fetchWithTimeout(url, fetchOptions, SUBMIT_TIMEOUT_MS);

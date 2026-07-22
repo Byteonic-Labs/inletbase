@@ -1,6 +1,6 @@
 # Inletbase
 
-The official client library for **Inletbase**. Send form submissions and drop a real-time AI chatbot into your site with almost no code. Works with **plain JavaScript**, **React**, and **Node.js** servers.
+The official client library for **Inletbase**. Send form submissions (including file uploads) and drop a real-time AI chatbot into your site with almost no code. Works with **plain JavaScript**, **React**, and **Node.js** servers.
 
 Two things to know up front:
 
@@ -171,6 +171,71 @@ myForm.addEventListener('submit', async (e) => {
 });
 ```
 
+### File uploads
+
+Inletbase forms accept file uploads with **no extra setup**. Any `File` or `Blob`
+you include in a submission is sent along with the other fields — this works with
+the React hook, the vanilla `InletbaseFormClient`, and the Node.js server client.
+
+**React (file input):** just add a file `<input>` to your form. The hook builds
+`FormData` from the form element, so the file is picked up automatically.
+
+```tsx
+import { useInletbaseForm } from 'inletbase/react';
+
+export default function ApplicationForm() {
+  const { submit, isLoading, isSuccess, error } = useInletbaseForm('job-application');
+
+  if (isSuccess) return <div>Application received!</div>;
+
+  return (
+    <form onSubmit={submit}>
+      <input type="text" name="name" required placeholder="Name" />
+
+      {/* a single file */}
+      <input type="file" name="resume" required />
+
+      {/* multiple files under one field name become an array */}
+      <input type="file" name="attachments" multiple />
+
+      <button type="submit" disabled={isLoading}>Apply</button>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </form>
+  );
+}
+```
+
+**Plain object or `FormData`:** pass `File`/`Blob` values directly — either
+top-level or inside an array. Non-file fields are sent unchanged.
+
+```ts
+import { InletbaseFormClient } from 'inletbase';
+
+const client = new InletbaseFormClient({ apiKey: 'YOUR_PUBLISHABLE_API_KEY' });
+
+// From a plain object
+await client.submit('job-application', {
+  name: 'Ada Lovelace',
+  resume: fileInput.files[0],   // a File
+  attachments: [file1, file2],  // an array of Files -> stored as multiple files
+});
+
+// …or straight from a <form>
+await client.submit('job-application', new FormData(formEl));
+```
+
+**How it works:** the SDK encodes each `File`/`Blob` into a base64 payload and
+submits the whole form as JSON (the shape the Inletbase backend stores), so you
+never handle multipart yourself. A few things to keep in mind:
+
+- Base64 adds roughly **33%** to a file's size, so keep uploads within your
+  plan's storage limits. A submission that exceeds your organization's storage
+  quota is rejected with a non-2xx status (see [Form response shape](#form-response-shape)).
+- Works in the browser and in **Node.js 18+** (which provides `File`/`Blob`), so
+  the server client below can send files too.
+- Repeated `FormData` keys and array values collapse into an array of files
+  under one field.
+
 ### Node.js server
 
 Handling submissions on your own backend (Next.js route handlers, Express, Fastify) and want to keep your key off the client? Use `InletbaseFormServerClient` from `inletbase/server`. It can forward the visitor's IP and user agent for accurate analytics, and can set the request origin to match a strict domain allow-list.
@@ -234,11 +299,18 @@ if (response.success) {
 
 ## Chatbot
 
-The simplest way to add a chatbot is a ready-made widget: the `InletbaseChatbot` component for React, or a `<script>` tag for any website. Both render the whole chat experience — launcher button, message history, streaming replies, text input, and send button — from just your bot ID, and both pick up the appearance you set in your dashboard (title, welcome message, colors, avatar, suggestions, position).
+The chatbot is a **hosted widget**: the full chat experience (launcher, message
+history, streaming replies, file attachments, input, and send) lives on the
+Inletbase backend and is served as a single script. This package doesn't
+reimplement it — the React component and the `<script>` tag simply **load the
+hosted widget** for your bot ID, so it always stays up to date without you
+upgrading the SDK. Appearance (title, welcome message, colors, avatar,
+suggestions, position) comes from your dashboard config.
 
-Chat needs **no API key**: the backend authorizes each request by matching the website domain it came from against your bot's allowed domains.
+Chat needs **no API key**: the backend authorizes each request by matching the
+website domain it came from against your bot's allowed domains.
 
-### React: the `InletbaseChatbot` component (recommended)
+### React: the `InletbaseChatbot` component
 
 ```tsx
 import { InletbaseChatbot } from 'inletbase/react';
@@ -253,20 +325,32 @@ export default function App() {
 }
 ```
 
+The component renders no DOM of its own: on mount it injects the hosted widget
+script, and on unmount it removes the script and the widget. It is SSR-safe (it
+only loads in the browser).
+
 Props:
 
 | Prop | Type | Description |
 |---|---|---|
 | `botId` | `string` | Your chatbot's ID. Required. |
-| `apiKey` | `string` (optional) | Accepted for backward compatibility, but the chat backend ignores it. |
-| `className` | `string` (optional) | Extra class on the widget's root element. |
-| `style` | `React.CSSProperties` (optional) | Inline styles for the widget's root element. |
+| `baseUrl` | `string` (optional) | Override the backend origin that hosts the widget. Defaults to `https://api.inletbase.com`. |
+| `apiKey` | `string` (optional) | Accepted for backward compatibility, but the chat backend ignores it (Origin_Auth). |
 
-If the bot ID is missing or its config can't be loaded (for example, the current domain isn't in the bot's allowed list), the component shows a visible error state instead of a broken input.
+### Any website: the `<script>` tag (no build step)
 
-### Any website: the `<script>` widget (recommended, no build step)
+For plain HTML, embed the hosted widget script directly:
 
-Add one tag with your bot ID and a working chatbot appears on the page. No bundler, no framework.
+```html
+<script
+  src="https://api.inletbase.com/widget/chatbot.js"
+  data-chatbot-id="YOUR_BOT_ID"
+  async
+></script>
+```
+
+The `unpkg` URL from earlier versions still works and now simply forwards to the
+hosted widget above (it reads `data-chatbot-id` and injects the backend script):
 
 ```html
 <script
@@ -280,7 +364,13 @@ Add one tag with your bot ID and a working chatbot appears on the page. No bundl
 |---|---|---|
 | `data-chatbot-id` | yes | Your chatbot's ID. Without it the widget reports an error and does not mount. |
 
-The widget renders inside its own isolated container, so it won't clash with your page's styles. If the config fails to load, it does not mount.
+If the config fails to load (e.g. the current domain isn't in the bot's allowed
+list), the widget does not mount.
+
+> **Note (2.0.2):** the chat widget is now backend-hosted. The
+> `InletbaseChatbot` `className`/`style` props were removed (the widget mounts
+> its own fixed container), and the chat client classes are no longer exported.
+> Forms are unchanged.
 
 ## Authentication
 
@@ -294,7 +384,9 @@ The widget renders inside its own isolated container, so it won't clash with you
 - **`inletbase`** — `InletbaseFormClient`.
 - **`inletbase/react`** — `useInletbaseForm`, `InletbaseProvider`, `useInletbaseFormClient`, `InletbaseFormHoneypot`, `InletbaseChatbot`.
 - **`inletbase/server`** — `InletbaseFormServerClient` (forms only).
-- **`<script>` widget** — served from `dist/widget/inletbase-chat.js` (no import needed).
+- **Hosted chat widget** — the `InletbaseChatbot` React component and the
+  `<script>` tag both load the backend-hosted widget (`api.inletbase.com/widget/chatbot.js`);
+  the `unpkg` `dist/widget/inletbase-chat.js` URL forwards to it.
 
 ---
 
