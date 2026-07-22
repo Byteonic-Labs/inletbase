@@ -1,6 +1,7 @@
 import { SubmissionResponse } from './types';
 import { SDK_VERSION } from './client';
 import { fetchWithTimeout } from './core/http';
+import { normalizeSubmissionData } from './core/files';
 import { normalizeResponse, normalizeFailure } from './core/response';
 
 /** Forms submission timeout window (Req 2.1). */
@@ -86,26 +87,21 @@ export class InletbaseFormServerClient {
       fetchHeaders['User-Agent'] = options.userAgent;
     }
 
-    let fetchOptions: RequestInit = {
+    // Normalize the input (FormData or object) into a JSON body, encoding any
+    // File/Blob values as base64 `__inletbase_file` payloads — the shape the
+    // forms backend stores. Always POST JSON (the forms endpoint does not decode
+    // raw multipart file parts).
+    const normalized = await normalizeSubmissionData(data);
+    const payload = { ...normalized, _meta: meta };
+
+    const fetchOptions: RequestInit = {
       method: 'POST',
-      headers: fetchHeaders
-    };
-
-    if (typeof FormData !== 'undefined' && data instanceof FormData) {
-      // Native Node 18+ FormData support
-      data.append('_meta', JSON.stringify(meta));
-      fetchOptions.body = data;
-    } else {
-      // Standard JSON payload
-      const payload = data as Record<string, any>;
-      payload._meta = meta;
-
-      fetchOptions.headers = {
-        ...fetchOptions.headers,
+      headers: {
+        ...fetchHeaders,
         'Content-Type': 'application/json'
-      };
-      fetchOptions.body = JSON.stringify(payload);
-    }
+      },
+      body: JSON.stringify(payload)
+    };
 
     // Exactly one request attempt — no retry (Req 2.3), bounded at 30s (Req 2.1).
     const result = await fetchWithTimeout(url, fetchOptions, FORMS_TIMEOUT_MS);
