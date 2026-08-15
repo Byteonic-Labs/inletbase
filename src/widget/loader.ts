@@ -66,8 +66,11 @@ export function loadChatbotWidget(options: LoadChatbotOptions): () => void {
     // them so a remount doesn't leave a second widget behind. (These ids are
     // unique, so this only affects this bot's widget.)
     if (typeof document !== 'undefined') {
+      // `#inletbase-chatbot-host` is the current shadow-DOM host; the legacy
+      // `#inletbase-chatbot-widget` id is kept so older cached widget bundles
+      // (which mounted directly in the light DOM) are still cleaned up.
       document
-        .querySelectorAll('#inletbase-chatbot-widget, #inletbase-proactive-popup')
+        .querySelectorAll('#inletbase-chatbot-host, #inletbase-chatbot-widget')
         .forEach((el) => {
           if (el.parentNode) el.parentNode.removeChild(el);
         });
