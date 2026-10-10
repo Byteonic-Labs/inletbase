@@ -390,4 +390,4 @@ list), the widget does not mount.
 
 ---
 
-*Built by [Byteonic Labs](https://byteoniclabs.com)*
+*Built by Inletbase Inc.*
